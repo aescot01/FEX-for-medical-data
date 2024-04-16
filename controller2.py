@@ -124,61 +124,6 @@ y = np.sin(X[:, 0]) * np.cos(X[:, 1])
 #If you want to reshape y to have a single column
 y = y.reshape(-1, 1)
 
-#generating random data for DS shap(Tx1)
-#T=100
-#X = np.random.rand(T, 1) 
-#print('DS')
-
-#generating random y data
-#T=100
-#y = np.random.rand(T, 1) 
-y = y.reshape(-1, 1)
-print('DS')
-
-# X = torch.tensor(X)
-# y = torch.tensor(y)
-# print('X',X.shape)
-# print('y',y.shape)
-
-alpha_range = range(5)
-x_range = np.linspace(0,25,1000)
-
-def find_peaks_troughs(alpha,x_values):
-    y_values = jn(alpha,x_values)
-    peaks, _ = find_peaks(y_values)
-    troughs, _ = find_peaks(-y_values)
-    return x_values[peaks], x_values[troughs]
-
-# find peaks and troughs for each alpha
-peak_troughs = {}
-for alpha in alpha_range:
-    peaks, troughs = find_peaks_troughs(alpha,x_range)
-    peak_troughs[alpha] = np.sort(np.concatenate((peaks,troughs)))
-
-
-x_min, x_max = 0, 25
-num_intervals = 25
-
-intervals = np.linspace(x_min, x_max, num_intervals + 1)
-
-# adaptive sampling within each interval
-sampled_points = []
-for i in range(num_intervals):
-    interval_start = intervals[i]
-    interval_end = intervals[i + 1]
-
-    # find all peaks and troughs within the interval
-    relevant_features = []
-    for alpha in alpha_range:
-        relevant_features.extend(peak_troughs[alpha][(peak_troughs[alpha] >= interval_start) & (peak_troughs[alpha] <= interval_end)])
-    
-    relevant_features = np.unique(relevant_features)
-    uniform_samples = np.linspace(interval_start, interval_end, 10)
-
-    interval_samples = np.unique(np.concatenate((relevant_features, uniform_samples)))
-    sampled_points.extend(interval_samples)
-
-sampled_points = np.unique(sampled_points)
 
 
 
@@ -744,110 +689,20 @@ class Controller(torch.nn.Module):
         return (tools.get_variable(zeros, True, requires_grad=False),
                 tools.get_variable(zeros.clone(), True, requires_grad=False))
     
-# class Controller(torch.nn.Module):
-#     """Based on
-#     https://github.com/pytorch/examples/blob/master/word_language_model/model.py
-#     Base the controller RNN on the GRU from:
-#     https://github.com/ikostrikov/pytorch-a2c-ppo-acktr/blob/master/model.py
-#     """
-#     def __init__(self):
-#         torch.nn.Module.__init__(self)
-
-#         self.softmax_temperature = 5.0
-#         self.tanh_c = 2.5
-#         self.mode = True
-
-#         # self.input_size = 20
-#         self.hidden_size = 50
-#         self.output_size = sum(structure_choice) # e.g., 39, i.e., sum of [12, 3, 12, 12]
-
-#         self.fc_layer1 = None
-#         # self._fc_controller = nn.Sequential(
-#         #     nn.Linear(self.input_size,self.hidden_size),
-#         #     nn.ReLU(inplace=True),
-#         #     nn.Linear(self.hidden_size,self.output_size))
-
-#     def forward(self,x):
-
-#         if self.fc_layer1 is None:
-#             self.fc_layer1 = nn.Linear(x.size(-1), self.hidden_size)
-
-#         x = self.fc_layer1(x)
-#         x = F.relu(x)
-
-#         x = nn.Linear(self.hidden_size,self.output_size)(x)
-
-
-#         logits = x/self.softmax_temperature
-
-#         # exploration # ??
-#         if self.mode == 'train':
-#             logits = (self.tanh_c*F.tanh(logits))
-
-#         return logits
-
-#     def sample(self, x,batch_size=1, step=0):
-#         """Samples a set of `args.num_blocks` many computational nodes from the
-#         controller, where each node is made up of an activation function, and
-#         each node except the last also includes a previous node.
-#         """
-
-#         # [B, L, H]
-#         inputs = torch.zeros(batch_size, self.input_size).to(get_device())
-
-#         log_probs = []
-#         actions = []
-#         total_logits = self.forward(x) # total_logits of size (10,39)
-
-
-#         cumsum = np.cumsum([0]+structure_choice) # [ 0 12 15 27 39]
-
-#         for idx in range(len(structure_choice)): # structure_choice : [12 3 12 12], so idx 0,1,2,3
-#             logits = total_logits[:, cumsum[idx]:cumsum[idx+1]]
-#             probs = F.softmax(logits, dim=-1) # tensor of size 10 * 12
-
-#             # log prob of sampling a particular operator for a particular node of tree
-#             log_prob = F.log_softmax(logits, dim=-1) # tensor of size 10 * 12
-#             # print(probs)
-#             if step>=args.random_step:
-#                 action = probs.multinomial(num_samples=1).data
-#             else:
-#                 action = torch.randint(0, structure_choice[idx], size=(batch_size, 1)).to(get_device())
-
-#             # action is a tensor of size (batch_size,1),i.e., 对batch 中每个树的 第idx 节点，选择一个operator
-#             # 对batch 中每一个树，按照概率 sample 其中一个节点的action，最后action 大小为（batch_size,1)
-
-#             # 以epsilon的概率均匀sample,i.e., batch 中所有树的第idx 节点都选择同样的均匀sample出的节点
-#             if args.greedy != 0:
-#                 for k in range(args.bs):
-#                     if np.random.rand(1)<args.greedy:
-#                         choice = random.choices(range(structure_choice[idx]), k=1)
-#                         action[k] = choice[0]
-#             # selected_log_prob of size (batch_size, 1)
-#             selected_log_prob = log_prob.gather(
-#                 1, tools.get_variable(action, requires_grad=False))
-
-#             log_probs.append(selected_log_prob[:, 0:1])
-#             actions.append(action[:, 0:1])
-
-
-
-#         log_probs = torch.cat(log_probs, dim=1)   # (batch_size,number of nodes),e.g. (10,4)
-#         # actions的大小为（10，4）
-#         # print(actions)
-#         return actions, log_probs
-
-#     def init_hidden(self, batch_size):
-#         zeros = torch.zeros(batch_size, self.controller_hid)
-#         return (tools.get_variable(zeros, True, requires_grad=False),
-#                 tools.get_variable(zeros.clone(), True, requires_grad=False))
 
 
 
 def get_reward(dy,xnew,bs, actions, learnable_tree,\
              tree_params,params):
     
-    dt,g,N,I_hat0,S_hat0,T,d = params  
+    dt,g,N,I_hat0,S_hat0,T,d = params
+
+    S_hat0 = torch.tensor([S_hat0], dtype=torch.float32)  # Convert to tensor and reshape if necessary
+    I_hat0 = torch.tensor([I_hat0], dtype=torch.float32)
+
+    # Now detach them if they need to be detached
+    S_hat0 = S_hat0.detach()
+    I_hat0 = I_hat0.detach()  
     dy = torch.from_numpy(dy).to(get_device()).to(torch.float32)
     
     xnew = torch.from_numpy(xnew).to(get_device()).to(torch.float32)
@@ -884,46 +739,29 @@ def get_reward(dy,xnew,bs, actions, learnable_tree,\
             #copy-past lines 865-873 in the other four change locations
             #b_fex is learnable tree, xnew is the input of dimension T x # of features
             Beta = learnable_tree(xnew,bs_action)
-            #print("beta shape: ",Beta.size())
-            #check that beta is of shape Tx1
-
-            #population count and recovery rate
-            #integrating and filling S,I
-            # S_hat ,I_hat = torch.zeros(T),torch.zeros(T)
-            # S_hat[0],I_hat[0] = S_hat0,I_hat0
-            # #s_hat,I_hat should be pytorch tensors of dim [T,1]
-            # for t in range(T-1):
-            #     S_hat[t+1] = S_hat[t]+(-Beta[t]*S_hat[t]*I_hat[t]/N)*dt
-            #     I_hat[t+1] = I_hat[t]+(Beta[t]*S_hat[t]*I_hat[t]/N-g*I_hat[t])*dt
-
-            # S_hat = S_hat.reshape(T,1)
-            # I_hat = I_hat.reshape(T,1)
-            #print(Beta)
-            # print(I_hat)
-
             T = Beta.size(0)
             S_hat,I_hat = torch.zeros(T,1), torch.zeros(T,1)
             S_hat[0], I_hat[0] = S_hat0,I_hat0
 
-            new_S_hat = torch.zeros_like(S_hat)
-            new_I_hat = torch.zeros_like(I_hat)
-
-            new_S_hat[0,:],new_I_hat[0,:] = S_hat[0,:],I_hat[0,:]
             for t in range(T-1):
-                new_S_hat[t + 1, :] = new_S_hat[t, :] + (-Beta[t] * new_S_hat[t, :] * new_I_hat[t, :] / N) * dt
-                new_I_hat[t + 1, :] = new_I_hat[t, :] + (Beta[t] * new_S_hat[t, :] * new_I_hat[t, :] / N - g * new_I_hat[t, :]) * dt
+                hat_dSdt = -Beta[t] * S_hat[t] * I_hat[t]/N
+                hat_dIdt = Beta[t] * S_hat[t] * I_hat[t]/N - g * I_hat[t]
 
-            S_hat,I_hat = new_S_hat,new_I_hat
+                S_hat[t+1] = (S_hat[t] + hat_dSdt * dt).detach()
+                I_hat[t+1] = (I_hat[t] + hat_dIdt * dt).detach()
+
+
             #double check the dimension of DS_hat,DS make sure they are torch.size() = (T,1)
-            DS_hat = Beta*S_hat*I_hat/N
-            print(DS_hat.size())
-            print(dy.size())
+            DS_hat = Beta * S_hat * I_hat/N
+
+
             loss = criterion(DS_hat,dy)
-            print('loss',loss)
+
             tree_optim.zero_grad()
             loss.backward()
-            exit()
+
             tree_optim.step()
+
 
 
         tree_optim = torch.optim.LBFGS(tree_params, lr=1, max_iter=T2)
@@ -939,22 +777,21 @@ def get_reward(dy,xnew,bs, actions, learnable_tree,\
             tree_optim.zero_grad()
             #change this later
             Beta = learnable_tree(xnew,bs_action)
-            S_hat ,I_hat = torch.zeros(T),torch.zeros(T)
-            S_hat[0],I_hat[0] = S_hat0,I_hat0
-            #s_hat,I_hat should be pytorch tensors of dim [T,1]
-            for t in range(T-1):
-                S_hat[t+1] = S_hat[t]+(-Beta[t]*S_hat[t]*I_hat[t]/N)*dt
-                I_hat[t+1] = I_hat[t]+(Beta[t]*S_hat[t]*I_hat[t]/N-g*I_hat[t])*dt
+            T = Beta.size(0)
+            S_hat,I_hat = torch.zeros(T,1), torch.zeros(T,1)
+            S_hat[0], I_hat[0] = S_hat0,I_hat0
 
-            S_hat = S_hat.reshape(T,1)
-            I_hat = I_hat.reshape(T,1)
-            #print(Beta)
-            # print(I_hat)
+            for t in range(T-1):
+                hat_dSdt = -Beta[t] * S_hat[t] * I_hat[t]/N
+                hat_dIdt = Beta[t] * S_hat[t] * I_hat[t]/N - g * I_hat[t]
+
+                S_hat[t+1] = (S_hat[t] + hat_dSdt * dt).detach()
+                I_hat[t+1] = (I_hat[t] + hat_dIdt * dt).detach()
+
 
             #double check the dimension of DS_hat,DS make sure they are torch.size() = (T,1)
-            DS_hat = Beta*S_hat*I_hat/N
-            print(DS_hat.size())
-            print(dy.size())
+            DS_hat = Beta * S_hat * I_hat/N
+
             loss = criterion(DS_hat,dy)
 
     
@@ -967,21 +804,24 @@ def get_reward(dy,xnew,bs, actions, learnable_tree,\
         tree_optim.step(closure)
 
         Beta = learnable_tree(xnew,bs_action)
-        S_hat ,I_hat = torch.zeros(T),torch.zeros(T)
-        S_hat[0],I_hat[0] = S_hat0,I_hat0
-        #s_hat,I_hat should be pytorch tensors of dim [T,1]
-        for t in range(T-1):
-            S_hat[t+1] = S_hat[t]+(-Beta[t]*S_hat[t]*I_hat[t]/N)*dt
-            I_hat[t+1] = I_hat[t]+(Beta[t]*S_hat[t]*I_hat[t]/N-g*I_hat[t])*dt
+        T = Beta.size(0)
+        S_hat,I_hat = torch.zeros(T,1), torch.zeros(T,1)
+        S_hat[0], I_hat[0] = S_hat0,I_hat0
 
-        S_hat = S_hat.reshape(T,1)
-        I_hat = I_hat.reshape(T,1)
-        #print(Beta)
-        # print(I_hat)
+        for t in range(T-1):
+            hat_dSdt = -Beta[t] * S_hat[t] * I_hat[t]/N
+            hat_dIdt = Beta[t] * S_hat[t] * I_hat[t]/N - g * I_hat[t]
+
+            S_hat[t+1] = (S_hat[t] + hat_dSdt * dt).detach()
+            I_hat[t+1] = (I_hat[t] + hat_dIdt * dt).detach()
+
 
         #double check the dimension of DS_hat,DS make sure they are torch.size() = (T,1)
-        DS_hat = Beta*S_hat*I_hat/N
+        DS_hat = Beta * S_hat * I_hat/N
+
+
         loss = criterion(DS_hat,dy)
+
 
         regression_error = loss
 
@@ -1019,7 +859,12 @@ def best_error(xnew,dy,best_action,\
                 learnable_tree,params):
 
     dt,g,N,I_hat0,S_hat0,T,d = params
+    S_hat0 = torch.tensor([S_hat0], dtype=torch.float32)  # Convert to tensor and reshape if necessary
+    I_hat0 = torch.tensor([I_hat0], dtype=torch.float32)
 
+    # Now detach them if they need to be detached
+    S_hat0 = S_hat0.detach()
+    I_hat0 = I_hat0.detach()  
     criterion = nn.MSELoss()
 
     dy = torch.from_numpy(dy).to(get_device()).to(torch.float32)
@@ -1030,22 +875,26 @@ def best_error(xnew,dy,best_action,\
     # keep tree1 and tree2 same format
     bs_action = best_action
 
-    Beta = learnable_tree(xnew,bs_action)
-    S_hat ,I_hat = torch.zeros(T),torch.zeros(T)
-    S_hat[0],I_hat[0] = S_hat0,I_hat0
-    #s_hat,I_hat should be pytorch tensors of dim [T,1]
-    for t in range(T-1):
-        S_hat[t+1] = S_hat[t]+(-Beta[t]*S_hat[t]*I_hat[t]/N)*dt
-        I_hat[t+1] = I_hat[t]+(Beta[t]*S_hat[t]*I_hat[t]/N-g*I_hat[t])*dt
 
-    S_hat = S_hat.reshape(T,1)
-    I_hat = I_hat.reshape(T,1)
-    #print(Beta)
-    # print(I_hat)
+    Beta = learnable_tree(xnew,bs_action)
+    T = Beta.size(0)
+    S_hat,I_hat = torch.zeros(T,1), torch.zeros(T,1)
+    S_hat[0], I_hat[0] = S_hat0,I_hat0
+
+    for t in range(T-1):
+        hat_dSdt = -Beta[t] * S_hat[t] * I_hat[t]/N
+        hat_dIdt = Beta[t] * S_hat[t] * I_hat[t]/N - g * I_hat[t]
+
+        S_hat[t+1] = (S_hat[t] + hat_dSdt * dt).detach()
+        I_hat[t+1] = (I_hat[t] + hat_dIdt * dt).detach()
+
 
     #double check the dimension of DS_hat,DS make sure they are torch.size() = (T,1)
-    DS_hat = Beta*S_hat*I_hat/N
+    DS_hat = Beta * S_hat * I_hat/N
+
+
     loss = criterion(DS_hat,dy)
+
 
     regression_error = loss
 
@@ -1057,7 +906,7 @@ def train_controller(xtest,dytest,controller, controller_optim,\
           hyperparams,params):
 
     ### obtain a new file name ###
-
+    dt,g,N,I_hat0,S_hat0,T,d = params
 
 
     file_name = os.path.join(hyperparams['checkpoint'], 'tree_{}_log{}.txt')
@@ -1309,20 +1158,22 @@ def train_controller(xtest,dytest,controller, controller_optim,\
 
         criterion = nn.MSELoss()
         Beta = learnable_tree(xtest,candidate_.action)
-        S_hat ,I_hat = torch.zeros(T),torch.zeros(T)
-        S_hat[0],I_hat[0] = S_hat0,I_hat0
-        #s_hat,I_hat should be pytorch tensors of dim [T,1]
-        for t in range(T-1):
-            S_hat[t+1] = S_hat[t]+(-Beta[t]*S_hat[t]*I_hat[t]/N)*dt
-            I_hat[t+1] = I_hat[t]+(Beta[t]*S_hat[t]*I_hat[t]/N-g*I_hat[t])*dt
+        T = Beta.size(0)
+        S_hat,I_hat = torch.zeros(T,1), torch.zeros(T,1)
+        S_hat[0], I_hat[0] = S_hat0,I_hat0
 
-        S_hat = S_hat.reshape(T,1)
-        I_hat = I_hat.reshape(T,1)
-        #print(Beta)
-        # print(I_hat)
+        for t in range(T-1):
+            hat_dSdt = -Beta[t] * S_hat[t] * I_hat[t]/N
+            hat_dIdt = Beta[t] * S_hat[t] * I_hat[t]/N - g * I_hat[t]
+
+            S_hat[t+1] = (S_hat[t] + hat_dSdt * dt).detach()
+            I_hat[t+1] = (I_hat[t] + hat_dIdt * dt).detach()
+
 
         #double check the dimension of DS_hat,DS make sure they are torch.size() = (T,1)
-        DS_hat = Beta*S_hat*I_hat/N
+        DS_hat = Beta * S_hat * I_hat/N
+
+
         loss = criterion(DS_hat,dytest)        
 
         print('l2 error: ', loss.item())
